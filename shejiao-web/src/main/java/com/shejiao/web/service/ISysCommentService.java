@@ -49,4 +49,9 @@ public interface ISysCommentService {
     int deleteCommentByIds(Long[] ids);
 
     Object getCommentCount(int enable);
+    
+    /**
+     * 获取指定月份评论数量
+     */
+    Object getCommentCount(int enable, String month);
 }

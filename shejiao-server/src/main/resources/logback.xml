@@ -75,6 +75,14 @@
 	<logger name="com.shejiao" level="info" />
 	<!-- Spring日志级别控制  -->
 	<logger name="org.springframework" level="warn" />
+	<!-- MyBatis日志级别控制  -->
+	<logger name="com.baomidou.mybatisplus" level="warn" />
+	<logger name="org.apache.ibatis" level="warn" />
+	<logger name="java.sql" level="warn" />
+	<!-- Mapper接口日志级别控制 -->
+	<logger name="com.shejiao.web.mapper" level="warn" />
+	<!-- Elasticsearch客户端日志级别控制 -->
+	<logger name="org.elasticsearch.client" level="error" />
 
 	<root level="info">
 		<appender-ref ref="console" />

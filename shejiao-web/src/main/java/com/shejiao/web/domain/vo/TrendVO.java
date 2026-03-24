@@ -25,6 +25,8 @@ public class TrendVO implements Serializable {
 
     private Long time;
 
+    private String title;
+
     private String content;
 
     private List<String> imgUrls;

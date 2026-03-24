@@ -8,20 +8,14 @@ import co.elastic.clients.elasticsearch.core.search.Hit;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.shejiao.common.constant.NoteConstant;
 import com.shejiao.common.utils.DozerUtil;
-import com.shejiao.web.domain.entity.WebComment;
-import com.shejiao.web.domain.entity.WebLikeOrCollect;
-import com.shejiao.web.domain.entity.WebUser;
-import com.shejiao.web.domain.entity.WebVisit;
+import com.shejiao.web.domain.entity.*;
 import com.shejiao.web.domain.vo.NoteSearchVO;
-import com.shejiao.web.mapper.WebCommentMapper;
-import com.shejiao.web.mapper.WebLikeOrCollectMapper;
-import com.shejiao.web.mapper.WebNoteMapper;
-import com.shejiao.web.mapper.SysVisitMapper;
-import com.shejiao.web.mapper.WebUserMapper;
+import com.shejiao.web.mapper.*;
 import com.shejiao.web.service.IWebRecommendService;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -53,7 +47,16 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
     private SysVisitMapper visitMapper;
     
     @Autowired
+    private WebNavbarMapper navbarMapper;
+    
+    @Autowired
     private ElasticsearchClient elasticsearchClient;
+    
+    @Autowired
+    private WebRecommendConfigMapper recommendConfigMapper;
+    
+    @Autowired
+    private WebFollowMapper followMapper;
 
     /**
      * 获取用户交互数据
@@ -67,7 +70,9 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
         
         long currentTime = System.currentTimeMillis();
         
-        // 1. 处理点赞和收藏数据（权重：收藏3.0，点赞2.0）
+        WebRecommendConfig config = getConfig();
+        
+        // 1. 处理点赞和收藏数据
         List<WebLikeOrCollect> likeOrCollects = likeOrCollectMapper.selectList(null);
         for (WebLikeOrCollect record : likeOrCollects) {
             try {
@@ -76,7 +81,7 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
                 
                 // 只处理笔记相关的点赞和收藏（type=1为点赞图片，type=3为收藏图片）
                 if (record.getType() == 1 || record.getType() == 3) {
-                    double baseWeight = record.getType() == 3 ? 3.0 : 1.5;
+                    double baseWeight = record.getType() == 3 ? config.getCollectWeight() : config.getLikeWeight();
                     double timeDecay = calculateTimeDecay(record.getTimestamp(), currentTime);
                     double weight = baseWeight * timeDecay;
                     
@@ -88,14 +93,14 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
             }
         }
         
-        // 2. 处理评论数据（权重：2.5）
+        // 2. 处理评论数据
         List<WebComment> comments = commentMapper.selectList(null);
         for (WebComment comment : comments) {
             try {
                 Long userId = Long.parseLong(comment.getUid());
                 Long noteId = Long.parseLong(comment.getNid());
                 
-                double baseWeight = 2.5;
+                double baseWeight = config.getCommentWeight();
                 double timeDecay = calculateTimeDecay(comment.getCreateTime().getTime(), currentTime);
                 double weight = baseWeight * timeDecay;
                 
@@ -106,7 +111,7 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
             }
         }
         
-        // 3. 处理浏览数据（权重：0.5）
+        // 3. 处理浏览数据
         QueryWrapper<WebVisit> visitQuery = new QueryWrapper<>();
         visitQuery.eq("behavior", "点击了文章");
         List<WebVisit> visits = visitMapper.selectList(visitQuery);
@@ -116,7 +121,7 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
                     Long userId = Long.parseLong(visit.getUserUid());
                     Long noteId = Long.parseLong(visit.getModuleUid());
                     
-                    double baseWeight = 0.5;
+                    double baseWeight = config.getVisitWeight();
                     double timeDecay = calculateTimeDecay(visit.getCreateTime().getTime(), currentTime);
                     double weight = baseWeight * timeDecay;
                     
@@ -128,7 +133,7 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
             }
         }
         
-        // 4. 处理搜索数据（权重：1.0）
+        // 4. 处理搜索数据
         QueryWrapper<WebVisit> searchQuery = new QueryWrapper<>();
         searchQuery.eq("behavior", "进行了搜索");
         List<WebVisit> searches = visitMapper.selectList(searchQuery);
@@ -142,7 +147,7 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
                     List<Long> relatedNoteIds = searchNotesByKeyword(searchKeyword, 5);
                     
                     // 为搜索到的笔记添加交互权重
-                    double baseWeight = 1.5;
+                    double baseWeight = config.getSearchWeight();
                     double timeDecay = calculateTimeDecay(search.getCreateTime().getTime(), currentTime);
                     double weight = baseWeight * timeDecay;
                     
@@ -156,10 +161,49 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
             }
         }
         
+        // 5. 处理关注关系数据
+        List<WebFollow> follows = followMapper.selectList(null);
+        for (WebFollow follow : follows) {
+            try {
+                Long userId = Long.parseLong(follow.getUid());
+                Long followUserId = Long.parseLong(follow.getFid());
+                
+                // 获取关注用户发布的笔记
+                QueryWrapper<WebNote> noteQuery = new QueryWrapper<>();
+                noteQuery.eq("uid", followUserId);
+                noteQuery.eq("audit_status", 1); // 只处理审核通过的笔记
+                List<WebNote> notes = noteMapper.selectList(noteQuery);
+                
+                double baseWeight = config.getFollowWeight();
+                double timeDecay = calculateTimeDecay(follow.getCreateTime().getTime(), currentTime);
+                double weight = baseWeight * timeDecay;
+                
+                for (WebNote note : notes) {
+                    Long noteId = Long.parseLong(note.getId());
+                    userItemMatrix.computeIfAbsent(userId, k -> new HashMap<>());
+                    userItemMatrix.get(userId).merge(noteId, weight, Double::sum);
+                }
+            } catch (NumberFormatException e) {
+                log.warn("解析关注关系数据失败: {}", follow);
+            }
+        }
+        
         log.info("构建用户-物品交互矩阵完成，用户数: {}", userItemMatrix.size());
         return userItemMatrix;
     }
     
+    /**
+     * 获取推荐算法配置
+     * @return 推荐算法配置
+     */
+    private WebRecommendConfig getConfig() {
+        List<WebRecommendConfig> configs = recommendConfigMapper.selectList(null);
+        if (configs != null && !configs.isEmpty()) {
+            return configs.get(0);
+        }
+        return WebRecommendConfig.getDefaultConfig();
+    }
+
     /**
      * 计算时间衰减因子
      * 使用指数衰减：weight * exp(-lambda * days)
@@ -171,7 +215,7 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
      */
     private double calculateTimeDecay(long timestamp, long currentTime) {
         long daysDiff = (currentTime - timestamp) / (1000 * 60 * 60 * 24);
-        double lambda = 0.04; // 衰减系数，半衰期约17天
+        double lambda = getConfig().getLambda(); // 从配置中获取衰减系数
         return Math.exp(-lambda * daysDiff);
     }
 
@@ -235,6 +279,8 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
             
         } catch (Exception e) {
             log.error("根据关键词搜索笔记失败: {}", keyword, e);
+            // Elasticsearch连接失败时返回空列表，避免整个推荐过程失败
+            return noteIds;
         }
         
         return noteIds;
@@ -420,6 +466,9 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
         // 默认使用混合协同过滤算法，返回更多结果以支持分页
         List<NoteSearchVO> recommendations = hybridCF(userId, 10, 15, 100);
         
+        // 记录推荐行为
+        recordRecommendBehavior(userId, recommendations, "hybrid_cf");
+        
         // 对推荐结果进行随机打乱，增加多样性
         Collections.shuffle(recommendations, random);
         
@@ -440,6 +489,9 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
         // 每次请求获取更多数据，确保有足够的推荐内容
         int requestSize = (int) pageSize * 2; // 请求2倍的数据量
         List<NoteSearchVO> recommendations = hybridCF(userId, 10, 15, requestSize);
+        
+        // 记录推荐行为
+        recordRecommendBehavior(userId, recommendations, "hybrid_cf");
         
         // 对推荐结果进行随机打乱，增加多样性
         Collections.shuffle(recommendations, random);
@@ -498,7 +550,11 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
         
         if (sortedSimilarUsers.isEmpty()) {
             log.warn("未找到相似用户，返回随机推荐");
-            return getRandomNotes(n);
+            List<NoteSearchVO> randomNotes = getRandomNotes(n);
+            // 记录推荐行为
+            recordRecommendBehavior(userId, randomNotes, "user_cf");
+            log.info("基于用户的协同过滤推荐完成，推荐笔记数: {}", randomNotes.size());
+            return randomNotes;
         }
         
         // 5. 计算目标用户的平均评分
@@ -542,6 +598,16 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
             }
         }
         
+        // 如果没有推荐物品，返回随机推荐
+        if (recommendedItems.isEmpty()) {
+            log.warn("未找到推荐物品，返回随机推荐");
+            List<NoteSearchVO> randomNotes = getRandomNotes(n);
+            // 记录推荐行为
+            recordRecommendBehavior(userId, randomNotes, "user_cf");
+            log.info("基于用户的协同过滤推荐完成，推荐笔记数: {}", randomNotes.size());
+            return randomNotes;
+        }
+        
         // 7. 按推荐分数排序，取前n个物品
         List<Map.Entry<Long, Double>> sortedEntries = recommendedItems.entrySet().stream()
                 .sorted(Map.Entry.<Long, Double>comparingByValue().reversed())
@@ -557,6 +623,20 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
         
         // 8. 获取推荐笔记的详细信息
         List<NoteSearchVO> result = getNoteSearchVOs(recommendedNoteIds);
+        
+        // 如果获取笔记失败，返回随机推荐
+        if (result.isEmpty()) {
+            log.warn("获取推荐笔记失败，返回随机推荐");
+            List<NoteSearchVO> randomNotes = getRandomNotes(n);
+            // 记录推荐行为
+            recordRecommendBehavior(userId, randomNotes, "user_cf");
+            log.info("基于用户的协同过滤推荐完成，推荐笔记数: {}", randomNotes.size());
+            return randomNotes;
+        }
+        
+        // 记录推荐行为
+        recordRecommendBehavior(userId, result, "user_cf");
+        
         log.info("基于用户的协同过滤推荐完成，推荐笔记数: {}", result.size());
         return result;
     }
@@ -636,6 +716,10 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
         
         // 7. 获取推荐笔记的详细信息
         List<NoteSearchVO> result = getNoteSearchVOs(recommendedNoteIds);
+        
+        // 记录推荐行为
+        recordRecommendBehavior(userId, result, "item_cf");
+        
         log.info("基于物品的协同过滤推荐完成，推荐笔记数: {}", result.size());
         return result;
     }
@@ -654,9 +738,10 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
         Map<Long, HybridScore> mergedRecommendations = new HashMap<>();
         Set<Long> recommendedNoteIds = new HashSet<>();
         
+        WebRecommendConfig config = getConfig();
         // 为不同算法的推荐结果设置不同权重
-        double userBasedWeight = 0.6;
-        double itemBasedWeight = 0.4;
+        double userBasedWeight = config.getUserCfWeight();
+        double itemBasedWeight = config.getItemCfWeight();
         
         // 处理用户协同过滤的推荐结果
         int userRank = 0;
@@ -710,7 +795,7 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
                 
                 Long noteId = Long.parseLong(note.getId());
                 if (!recommendedNoteIds.contains(noteId)) {
-                    double score = (hotNotes.size() - hotRank) * 0.3; // 热门推荐权重较低
+                    double score = (hotNotes.size() - hotRank) * config.getHotWeight(); // 热门推荐权重
                     mergedRecommendations.put(noteId, new HybridScore(note, score));
                     recommendedNoteIds.add(noteId);
                 }
@@ -732,7 +817,7 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
                     
                     Long noteId = Long.parseLong(note.getId());
                     if (!recommendedNoteIds.contains(noteId)) {
-                        double score = (latestNotes.size() - latestRank) * 0.2; // 最新推荐权重更低
+                        double score = (latestNotes.size() - latestRank) * config.getLatestWeight(); // 最新推荐权重
                         mergedRecommendations.put(noteId, new HybridScore(note, score));
                         recommendedNoteIds.add(noteId);
                     }
@@ -798,17 +883,53 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
      */
     @SneakyThrows
     private List<NoteSearchVO> getRandomNotes(int n) {
-        SearchRequest searchRequest = SearchRequest.of(s -> s
-                .index(NoteConstant.NOTE_INDEX)
-                .size(n * 2));
-        SearchResponse<NoteSearchVO> searchResponse = elasticsearchClient.search(searchRequest, NoteSearchVO.class);
-        
-        List<NoteSearchVO> notes = searchResponse.hits().hits().stream()
-                .map(Hit::source)
-                .collect(Collectors.toList());
-        
-        Collections.shuffle(notes);
-        return notes.stream().limit(n).collect(Collectors.toList());
+        try {
+            SearchRequest searchRequest = SearchRequest.of(s -> s
+                    .index(NoteConstant.NOTE_INDEX)
+                    .size(n * 2));
+            SearchResponse<NoteSearchVO> searchResponse = elasticsearchClient.search(searchRequest, NoteSearchVO.class);
+            
+            List<NoteSearchVO> notes = searchResponse.hits().hits().stream()
+                    .map(Hit::source)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            
+            // 为每个笔记设置收藏数、评论数和分类信息
+            for (NoteSearchVO note : notes) {
+                Long noteId = Long.parseLong(note.getId());
+                // 查询收藏数
+                QueryWrapper<WebLikeOrCollect> collectQuery = new QueryWrapper<>();
+                collectQuery.eq("like_or_collection_id", noteId.toString());
+                collectQuery.eq("type", 3); // 3表示收藏
+                long collectionCount = likeOrCollectMapper.selectCount(collectQuery);
+                note.setCollectionCount(collectionCount);
+                
+                // 查询评论数
+                QueryWrapper<WebComment> commentQuery = new QueryWrapper<>();
+                commentQuery.eq("nid", noteId.toString());
+                long commentCount = commentMapper.selectCount(commentQuery);
+                note.setCommentCount(commentCount);
+                
+                // 设置分类信息
+                if (StringUtils.isNotBlank(note.getCpid())) {
+                    WebNavbar category = navbarMapper.selectById(note.getCpid());
+                    if (category != null) {
+                        note.setCategoryName(category.getTitle());
+                    }
+                } else if (StringUtils.isNotBlank(note.getCid())) {
+                    WebNavbar category = navbarMapper.selectById(note.getCid());
+                    if (category != null) {
+                        note.setCategoryName(category.getTitle());
+                    }
+                }
+            }
+            
+            Collections.shuffle(notes);
+            return notes.stream().limit(n).collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("获取随机笔记失败", e);
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -820,22 +941,57 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
      */
     @SneakyThrows
     private List<NoteSearchVO> getHotNotes(int n, Set<Long> excludeIds) {
-        // 添加随机性，从热门笔记中随机选择
-        SearchRequest searchRequest = SearchRequest.of(s -> s
-                .index(NoteConstant.NOTE_INDEX)
-                .sort(o -> o.field(f -> f.field("likeCount").order(co.elastic.clients.elasticsearch._types.SortOrder.Desc)))
-                .size(n * 5)); // 获取更多数据，用于随机选择
-        SearchResponse<NoteSearchVO> searchResponse = elasticsearchClient.search(searchRequest, NoteSearchVO.class);
-        
-        List<NoteSearchVO> notes = searchResponse.hits().hits().stream()
-                .map(Hit::source)
-                .filter(Objects::nonNull)
-                .filter(note -> !excludeIds.contains(Long.parseLong(note.getId())))
-                .collect(Collectors.toList());
-        
-        // 随机打乱并返回前n个
-        Collections.shuffle(notes);
-        return notes.stream().limit(n).collect(Collectors.toList());
+        try {
+            // 添加随机性，从热门笔记中随机选择
+            SearchRequest searchRequest = SearchRequest.of(s -> s
+                    .index(NoteConstant.NOTE_INDEX)
+                    .sort(o -> o.field(f -> f.field("likeCount").order(co.elastic.clients.elasticsearch._types.SortOrder.Desc)))
+                    .size(n * 5)); // 获取更多数据，用于随机选择
+            SearchResponse<NoteSearchVO> searchResponse = elasticsearchClient.search(searchRequest, NoteSearchVO.class);
+            
+            List<NoteSearchVO> notes = searchResponse.hits().hits().stream()
+                    .map(Hit::source)
+                    .filter(Objects::nonNull)
+                    .filter(note -> !excludeIds.contains(Long.parseLong(note.getId())))
+                    .collect(Collectors.toList());
+            
+            // 为每个笔记设置收藏数、评论数和分类信息
+            for (NoteSearchVO note : notes) {
+                Long noteId = Long.parseLong(note.getId());
+                // 查询收藏数
+                QueryWrapper<WebLikeOrCollect> collectQuery = new QueryWrapper<>();
+                collectQuery.eq("like_or_collection_id", noteId.toString());
+                collectQuery.eq("type", 3); // 3表示收藏
+                long collectionCount = likeOrCollectMapper.selectCount(collectQuery);
+                note.setCollectionCount(collectionCount);
+                
+                // 查询评论数
+                QueryWrapper<WebComment> commentQuery = new QueryWrapper<>();
+                commentQuery.eq("nid", noteId.toString());
+                long commentCount = commentMapper.selectCount(commentQuery);
+                note.setCommentCount(commentCount);
+                
+                // 设置分类信息
+                if (StringUtils.isNotBlank(note.getCpid())) {
+                    WebNavbar category = navbarMapper.selectById(note.getCpid());
+                    if (category != null) {
+                        note.setCategoryName(category.getTitle());
+                    }
+                } else if (StringUtils.isNotBlank(note.getCid())) {
+                    WebNavbar category = navbarMapper.selectById(note.getCid());
+                    if (category != null) {
+                        note.setCategoryName(category.getTitle());
+                    }
+                }
+            }
+            
+            // 随机打乱并返回前n个
+            Collections.shuffle(notes);
+            return notes.stream().limit(n).collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("获取热门笔记失败", e);
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -847,22 +1003,111 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
      */
     @SneakyThrows
     private List<NoteSearchVO> getLatestNotes(int n, Set<Long> excludeIds) {
-        // 添加随机性，从最新笔记中随机选择
-        SearchRequest searchRequest = SearchRequest.of(s -> s
-                .index(NoteConstant.NOTE_INDEX)
-                .sort(o -> o.field(f -> f.field("createTime").order(co.elastic.clients.elasticsearch._types.SortOrder.Desc)))
-                .size(n * 5)); // 获取更多数据，用于随机选择
-        SearchResponse<NoteSearchVO> searchResponse = elasticsearchClient.search(searchRequest, NoteSearchVO.class);
-        
-        List<NoteSearchVO> notes = searchResponse.hits().hits().stream()
-                .map(Hit::source)
-                .filter(Objects::nonNull)
-                .filter(note -> !excludeIds.contains(Long.parseLong(note.getId())))
-                .collect(Collectors.toList());
-        
-        // 随机打乱并返回前n个
-        Collections.shuffle(notes);
-        return notes.stream().limit(n).collect(Collectors.toList());
+        try {
+            // 添加随机性，从最新笔记中随机选择
+            SearchRequest searchRequest = SearchRequest.of(s -> s
+                    .index(NoteConstant.NOTE_INDEX)
+                    .sort(o -> o.field(f -> f.field("createTime").order(co.elastic.clients.elasticsearch._types.SortOrder.Desc)))
+                    .size(n * 5)); // 获取更多数据，用于随机选择
+            SearchResponse<NoteSearchVO> searchResponse = elasticsearchClient.search(searchRequest, NoteSearchVO.class);
+            
+            List<NoteSearchVO> notes = searchResponse.hits().hits().stream()
+                    .map(Hit::source)
+                    .filter(Objects::nonNull)
+                    .filter(note -> !excludeIds.contains(Long.parseLong(note.getId())))
+                    .collect(Collectors.toList());
+            
+            // 为每个笔记设置收藏数、评论数和分类信息
+            for (NoteSearchVO note : notes) {
+                Long noteId = Long.parseLong(note.getId());
+                // 查询收藏数
+                QueryWrapper<WebLikeOrCollect> collectQuery = new QueryWrapper<>();
+                collectQuery.eq("like_or_collection_id", noteId.toString());
+                collectQuery.eq("type", 3); // 3表示收藏
+                long collectionCount = likeOrCollectMapper.selectCount(collectQuery);
+                note.setCollectionCount(collectionCount);
+                
+                // 查询评论数
+                QueryWrapper<WebComment> commentQuery = new QueryWrapper<>();
+                commentQuery.eq("nid", noteId.toString());
+                long commentCount = commentMapper.selectCount(commentQuery);
+                note.setCommentCount(commentCount);
+                
+                // 设置分类信息
+                if (StringUtils.isNotBlank(note.getCpid())) {
+                    WebNavbar category = navbarMapper.selectById(note.getCpid());
+                    if (category != null) {
+                        note.setCategoryName(category.getTitle());
+                    }
+                } else if (StringUtils.isNotBlank(note.getCid())) {
+                    WebNavbar category = navbarMapper.selectById(note.getCid());
+                    if (category != null) {
+                        note.setCategoryName(category.getTitle());
+                    }
+                }
+            }
+            
+            // 随机打乱并返回前n个
+            Collections.shuffle(notes);
+            return notes.stream().limit(n).collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("获取最新笔记失败", e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 记录推荐行为到web_visit表
+     *
+     * @param userId 用户ID
+     * @param recommendations 推荐结果
+     * @param algorithmType 算法类型
+     */
+    private void recordRecommendBehavior(Long userId, List<NoteSearchVO> recommendations, String algorithmType) {
+        try {
+            if (recommendations.isEmpty()) {
+                return;
+            }
+            
+            // 限制每次记录的推荐数量，避免数据库压力
+            int maxRecords = 50;
+            int recordCount = 0;
+            
+            for (NoteSearchVO note : recommendations) {
+                if (recordCount >= maxRecords) {
+                    break;
+                }
+                
+                if (note == null || note.getId() == null) {
+                    continue;
+                }
+                
+                WebVisit visit = new WebVisit();
+                visit.setUserUid(userId.toString());
+                visit.setBehavior("推荐");
+                visit.setModuleUid(note.getId());
+                visit.setOtherData(algorithmType);
+                visit.setStatus(1); // 设置为有效状态
+                visit.setCreateTime(new Date());
+                visit.setUpdateTime(new Date());
+                
+                // 确保必填字段都有值
+                if (visit.getUserUid() == null || visit.getBehavior() == null || visit.getModuleUid() == null) {
+                    continue;
+                }
+                
+                try {
+                    int result = visitMapper.insert(visit);
+                    if (result > 0) {
+                        recordCount++;
+                    }
+                } catch (Exception e) {
+                    // 记录失败不影响推荐结果返回
+                }
+            }
+        } catch (Exception e) {
+            // 记录失败不影响推荐结果返回
+        }
     }
 
     /**
@@ -879,21 +1124,52 @@ public class WebRecommendServiceImpl implements IWebRecommendService {
         
         List<NoteSearchVO> noteSearchVOs = new ArrayList<>();
         
-        // 根据ID列表从Elasticsearch中获取笔记
-        for (Long noteId : noteIds) {
-            SearchRequest searchRequest = SearchRequest.of(s -> s
-                    .index(NoteConstant.NOTE_INDEX)
-                    .query(q -> q.match(m -> m.field("id").query(String.valueOf(noteId))))
-                    .size(1));
-            
-            SearchResponse<NoteSearchVO> searchResponse = elasticsearchClient.search(searchRequest, NoteSearchVO.class);
-            
-            if (searchResponse.hits().hits().size() > 0) {
-                NoteSearchVO noteSearchVO = searchResponse.hits().hits().get(0).source();
-                if (noteSearchVO != null) {
-                    noteSearchVOs.add(noteSearchVO);
+        try {
+            // 根据ID列表从Elasticsearch中获取笔记
+            for (Long noteId : noteIds) {
+                SearchRequest searchRequest = SearchRequest.of(s -> s
+                        .index(NoteConstant.NOTE_INDEX)
+                        .query(q -> q.match(m -> m.field("id").query(String.valueOf(noteId))))
+                        .size(1));
+                
+                SearchResponse<NoteSearchVO> searchResponse = elasticsearchClient.search(searchRequest, NoteSearchVO.class);
+                
+                if (searchResponse.hits().hits().size() > 0) {
+                    NoteSearchVO noteSearchVO = searchResponse.hits().hits().get(0).source();
+                    if (noteSearchVO != null) {
+                        // 查询收藏数
+                        QueryWrapper<WebLikeOrCollect> collectQuery = new QueryWrapper<>();
+                        collectQuery.eq("like_or_collection_id", noteId.toString());
+                        collectQuery.eq("type", 3); // 3表示收藏
+                        long collectionCount = likeOrCollectMapper.selectCount(collectQuery);
+                        noteSearchVO.setCollectionCount(collectionCount);
+                        
+                        // 查询评论数
+                        QueryWrapper<WebComment> commentQuery = new QueryWrapper<>();
+                        commentQuery.eq("nid", noteId.toString());
+                        long commentCount = commentMapper.selectCount(commentQuery);
+                        noteSearchVO.setCommentCount(commentCount);
+                        
+                        // 设置分类信息
+                        if (StringUtils.isNotBlank(noteSearchVO.getCpid())) {
+                            WebNavbar category = navbarMapper.selectById(noteSearchVO.getCpid());
+                            if (category != null) {
+                                noteSearchVO.setCategoryName(category.getTitle());
+                            }
+                        } else if (StringUtils.isNotBlank(noteSearchVO.getCid())) {
+                            WebNavbar category = navbarMapper.selectById(noteSearchVO.getCid());
+                            if (category != null) {
+                                noteSearchVO.setCategoryName(category.getTitle());
+                            }
+                        }
+                        
+                        noteSearchVOs.add(noteSearchVO);
+                    }
                 }
             }
+        } catch (Exception e) {
+            log.error("从Elasticsearch获取笔记失败", e);
+            // Elasticsearch连接失败时返回空列表
         }
         
         return noteSearchVOs;

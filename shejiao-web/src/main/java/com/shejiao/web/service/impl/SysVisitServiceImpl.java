@@ -100,4 +100,71 @@ public class SysVisitServiceImpl implements ISysVisitService {
         redisUtil.setEx(cacheKey, JsonUtils.objectToJson(resultMap), 10, TimeUnit.MINUTES);
         return resultMap;
     }
+
+    @Override
+    public int getWebVisitCount(String month) {
+        if (month == null || month.isEmpty()) {
+            return getWebVisitCount();
+        }
+        
+        // 根据月份参数查询对应的数据
+        // 构建月份的开始和结束时间
+        String startTime = month + "-01 00:00:00";
+        int daysInMonth = java.time.YearMonth.parse(month).lengthOfMonth();
+        String endTime = month + "-" + daysInMonth + " 23:59:59";
+        
+        // 获得指定月份的访问量
+        return loginInforMapper.getIpCount(startTime, endTime);
+    }
+
+    @Override
+    public Map<String, Object> getVisitByWeek(String month) {
+        if (month == null || month.isEmpty()) {
+            return getVisitByWeek();
+        }
+        
+        // 根据月份参数查询对应的数据
+        // 构建月份的开始和结束时间
+        String startTime = month + "-01 00:00:00";
+        int daysInMonth = java.time.YearMonth.parse(month).lengthOfMonth();
+        String endTime = month + "-" + daysInMonth + " 23:59:59";
+        
+        // 获取月份的日期列表
+        List<String> daysList = new ArrayList<>();
+        for (int i = 1; i <= daysInMonth; i++) {
+            daysList.add(month + "-" + String.format("%02d", i));
+        }
+        
+        // 获得指定月份的访问量
+        List<Map<String, Object>> pvMap = visitMapper.getPVByWeek(startTime, endTime);
+        // 获得指定月份的独立用户
+        List<Map<String, Object>> uvMap = visitMapper.getUVByWeek(startTime, endTime);
+
+        Map<String, Object> countPVMap = new HashMap<>();
+        Map<String, Object> countUVMap = new HashMap<>();
+
+        for (Map<String, Object> item : pvMap) {
+            countPVMap.put(item.get("DATE").toString(), item.get("COUNT"));
+        }
+        for (Map<String, Object> item : uvMap) {
+            countUVMap.put(item.get("DATE").toString(), item.get("COUNT"));
+        }
+
+        List<Integer> pvList = new ArrayList<>();
+        List<Integer> uvList = new ArrayList<>();
+        List<String> dateList = new ArrayList<>();
+
+        for (String day : daysList) {
+            dateList.add(day.substring(5)); // 提取 MM-dd 部分
+            pvList.add(countPVMap.get(day) != null ? ((Number) countPVMap.get(day)).intValue() : 0);
+            uvList.add(countUVMap.get(day) != null ? ((Number) countUVMap.get(day)).intValue() : 0);
+        }
+
+        Map<String, Object> resultMap = new HashMap<>(Constantss.NUM_THREE);
+        resultMap.put("date", dateList);
+        resultMap.put("pv", pvList);
+        resultMap.put("uv", uvList);
+
+        return resultMap;
+    }
 }

@@ -217,4 +217,22 @@ public class SysCommentServiceImpl implements ISysCommentService {
 //        queryWrapper.eq(BaseSQLConf.STATUS, status);
         return Math.toIntExact(commentMapper.selectCount(queryWrapper));
     }
+
+    @Override
+    public Object getCommentCount(int enable, String month) {
+        if (month == null || month.isEmpty()) {
+            return getCommentCount(enable);
+        }
+        
+        // 根据月份参数查询对应的数据
+        // 构建月份的开始和结束时间
+        String startTime = month + "-01 00:00:00";
+        int daysInMonth = java.time.YearMonth.parse(month).lengthOfMonth();
+        String endTime = month + "-" + daysInMonth + " 23:59:59";
+        
+        QueryWrapper<WebComment> queryWrapper = new QueryWrapper<>();
+        queryWrapper.ge("create_time", startTime)
+                   .le("create_time", endTime);
+        return Math.toIntExact(commentMapper.selectCount(queryWrapper));
+    }
 }

@@ -49,6 +49,9 @@ public class FileTypeUtils {
      * @return 后缀（不含".")
      */
     public static String getFileExtendName(byte[] photoByte) {
+        if (photoByte == null || photoByte.length < 10) {
+            return "JPG";
+        }
         String strFileExtendName = "JPG";
         if ((photoByte[0] == 71) && (photoByte[1] == 73) && (photoByte[2] == 70) && (photoByte[3] == 56)
                 && ((photoByte[4] == 55) || (photoByte[4] == 57)) && (photoByte[5] == 97)) {

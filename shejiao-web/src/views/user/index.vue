@@ -44,6 +44,14 @@
                       size="small"
                       style="margin-left: 0.3125rem"
                     />
+                    <el-button
+                      v-show="_isEditInfo"
+                      @click="confirmUserInfo"
+                      size="small"
+                      style="margin-left: 0.3125rem"
+                    >
+                      完成
+                    </el-button>
                   </div>
                   <div class="user-name" v-else>
                     {{ userInfo.username }}
@@ -59,19 +67,37 @@
               <div v-if="!_isEditInfo">
                 <span v-if="userInfo.description === null">这个人什么都没有写～</span>
                 <span v-else>{{ userInfo.description }}</span>
+                <el-button
+                  :icon="Edit"
+                  v-show="!_isEditInfo"
+                  @click="_isEditInfo = true"
+                  circle
+                  size="small"
+                  style="margin-left: 0.3125rem"
+                />
               </div>
-              <el-input
-                v-else
-                v-model="userInfo.description"
-                maxlength="250"
-                placeholder="请对你自己进行简单的介绍吧！❤️"
-                @keyup.enter="confirmUserInfo"
-                show-word-limit
-                :autosize="true"
-                type="textarea"
-              />
+              <div v-else>
+                <el-input
+                  v-model="userInfo.description"
+                  maxlength="250"
+                  placeholder="请对你自己进行简单的介绍吧！❤️"
+                  @keyup.enter="confirmUserInfo"
+                  show-word-limit
+                  :autosize="true"
+                  type="textarea"
+                />
+                <el-button
+                  v-show="_isEditInfo"
+                  @click="confirmUserInfo"
+                  size="small"
+                  style="margin-left: 0.3125rem; margin-top: 0.5rem"
+                >
+                  完成
+                </el-button>
+              </div>
             </div>
             <div class="user-tags">
+              <div v-show="uid === currentUid" style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.5rem;">给自己添加标签，让别人更容易了解你</div>
               <el-tag
                 style="margin-left: 0.3125rem"
                 v-for="tag in tagList"
@@ -93,6 +119,7 @@
                 size="small"
                 @keyup.enter="handleInputConfirm"
                 @blur="handleInputConfirm"
+                placeholder="添加标签"
               />
               <el-button
                 style="margin-left: 0.3125rem"
@@ -130,6 +157,9 @@
           <el-button type="primary" round v-if="_isFollow" @click="follow(uid, 1)">已关注</el-button>
           <el-button type="primary" round v-else @click="follow(uid, 0)">关注</el-button>
           <el-button class="back-button" round @click="goToMyPage">返回我的主页</el-button>
+        </div>
+        <div class="tool-btn" v-show="uid === currentUid">
+          <el-button type="primary" round @click="passwordDialogVisible = true">修改密码</el-button>
         </div>
       </div>
     </div>
@@ -215,6 +245,30 @@
           <span>暂无粉丝</span>
         </div>
       </div>
+      <!-- 修改密码对话框 -->
+      <el-dialog
+        v-model="passwordDialogVisible"
+        title="修改密码"
+        width="500px"
+      >
+        <el-form ref="pwdRef" :model="passwordForm" :rules="passwordRules" label-width="80px">
+          <el-form-item label="旧密码" prop="oldPassword">
+            <el-input v-model="passwordForm.oldPassword" placeholder="请输入旧密码" type="password" show-password />
+          </el-form-item>
+          <el-form-item label="新密码" prop="newPassword">
+            <el-input v-model="passwordForm.newPassword" placeholder="请输入新密码" type="password" show-password />
+          </el-form-item>
+          <el-form-item label="确认密码" prop="confirmPassword">
+            <el-input v-model="passwordForm.confirmPassword" placeholder="请确认新密码" type="password" show-password/>
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="passwordDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitPassword">确认修改</el-button>
+          </span>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -222,13 +276,13 @@
 <script lang="ts" setup>
 import { ChatLineRound, Edit } from "@element-plus/icons-vue";
 import { ref, nextTick, onMounted, watch } from "vue";
-import { getUserById, updateUser } from "@/api/user";
+import { getUserById, updateUser, updatePassword } from "@/api/user";
 import Note from "@/components/Note.vue";
 import { useUserStore } from "@/store/userStore";
 import Chat from "@/components/Chat.vue";
 import { followById, isFollow, getFollowList, getFanList } from "@/api/follower";
 import { useRoute, useRouter } from "vue-router";
-import { ElInput, ElMessage, UploadProps } from "element-plus";
+import { ElInput, ElMessage, UploadProps, ElForm } from "element-plus";
 import { baseURL } from "@/constant/constant";
 
 const route = useRoute();
@@ -252,6 +306,29 @@ const inputTagValue = ref("");
 const fileAction = baseURL + "web/oss/save/1";
 const followList = ref<any[]>([]);
 const fanList = ref<any[]>([]);
+
+// 修改密码相关
+const passwordDialogVisible = ref(false);
+const pwdRef = ref<InstanceType<typeof ElForm>>();
+const passwordForm = ref({
+  oldPassword: "",
+  newPassword: "",
+  confirmPassword: ""
+});
+
+const equalToPassword = (rule: any, value: any, callback: any) => {
+  if (passwordForm.value.newPassword !== value) {
+    callback(new Error("两次输入的密码不一致"));
+  } else {
+    callback();
+  }
+};
+
+const passwordRules = ref({
+  oldPassword: [{ required: true, message: "旧密码不能为空", trigger: "blur" }],
+  newPassword: [{ required: true, message: "新密码不能为空", trigger: "blur" }, { min: 6, max: 20, message: "长度在 6 到 20 个字符", trigger: "blur" }],
+  confirmPassword: [{ required: true, message: "确认密码不能为空", trigger: "blur" }, { required: true, validator: equalToPassword, trigger: "blur" }]
+});
 
 const showInput = () => {
   inputVisible.value = true;
@@ -356,6 +433,36 @@ const follow = (fid: string, type: number) => {
         user.isFollow = type == 0;
       }
     });
+  });
+};
+
+const submitPassword = () => {
+  pwdRef.value?.validate((valid: boolean) => {
+    if (valid) {
+      // 调用修改密码接口
+      const updatePasswordData = {
+        id: currentUid,
+        oldPassword: passwordForm.value.oldPassword,
+        password: passwordForm.value.newPassword,
+        checkPassword: passwordForm.value.confirmPassword
+      };
+      updatePassword(updatePasswordData)
+        .then(() => {
+          ElMessage.success("密码修改成功，请重新登录");
+          passwordDialogVisible.value = false;
+          // 清空表单
+          passwordForm.value = {
+            oldPassword: "",
+            newPassword: "",
+            confirmPassword: ""
+          };
+          // 可以选择跳转到登录页面
+          // router.push('/login');
+        })
+        .catch(() => {
+          ElMessage.error("密码修改失败，请稍后再试");
+        });
+    }
   });
 };
 

@@ -56,6 +56,10 @@ public class NoteSearchVO implements Serializable {
 
     private Long likeCount;
 
+    private Long collectionCount;
+
+    private Long commentCount;
+
     private Long viewCount;
 
     private Long time;

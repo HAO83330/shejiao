@@ -140,10 +140,63 @@ export const dynamicRoutes = [
     permissions: ['web:comment:list'],
     children: [
       {
-        path: 'index/:nid(\\d+)',
+        path: 'index/:nid(\d+)',
         component: () => import('@/views/web/comment/data'),
         name: 'CommentData',
         meta: { title: '评论数据', activeMenu: '/web/comment' }
+      }
+    ]
+  },
+  {
+    path: '/web/message/userChatManagement',
+    component: Layout,
+    hidden: true,
+    permissions: ['web:chat:list'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/web/message/userChatManagement/index.vue'),
+        name: 'UserChatManagement',
+        meta: { title: '用户聊天管理', activeMenu: '/web/message/userChatManagement' }
+      },
+      {
+        path: 'detail',
+        component: () => import('@/views/web/message/userChatManagement/detail.vue'),
+        name: 'UserChatDetail',
+        meta: { title: '用户聊天详情', activeMenu: '/web/message/userChatManagement' }
+      }
+    ]
+  },
+  {
+    path: '/message/userChatManagement',
+    component: Layout,
+    hidden: true,
+    permissions: ['web:chat:list'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/web/message/userChatManagement/index.vue'),
+        name: 'UserChatManagement2',
+        meta: { title: '用户聊天管理', activeMenu: '/message/userChatManagement' }
+      },
+      {
+        path: 'detail',
+        component: () => import('@/views/web/message/userChatManagement/detail.vue'),
+        name: 'UserChatDetail2',
+        meta: { title: '用户聊天详情', activeMenu: '/message/userChatManagement' }
+      }
+    ]
+  },
+  {
+    path: '/web/recommend',
+    component: Layout,
+    permissions: ['web:recommend:list'],
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/web/recommend/index'),
+        name: 'RecommendConfig',
+        meta: { title: '推荐算法管理', icon: 'chart' }
       }
     ]
   },

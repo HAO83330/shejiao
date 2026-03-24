@@ -9,6 +9,7 @@ import com.shejiao.common.core.page.TableDataInfo;
 import com.shejiao.common.enums.BusinessType;
 import com.shejiao.common.utils.poi.ExcelUtil;
 import com.shejiao.web.domain.entity.WebUser;
+import com.shejiao.web.mapper.WebUserMapper;
 import com.shejiao.web.service.ISysMemberService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,6 +31,9 @@ public class SysMemberController extends BaseController {
 
     @Autowired
     private ISysMemberService memberService;
+    
+    @Autowired
+    private WebUserMapper webUserMapper;
 
 
     /**
@@ -48,8 +52,16 @@ public class SysMemberController extends BaseController {
      */
     @PreAuthorize("@ss.hasPermi('web:member:query')")
     @GetMapping(value = "/{id}")
-    public AjaxResult getInfo(@PathVariable Long id) {
-        return success(memberService.selectMemberById(id));
+    public AjaxResult getInfo(@PathVariable String id) {
+        try {
+            // 尝试将id转换为Long类型
+            Long longId = Long.parseLong(id);
+            return success(memberService.selectMemberById(longId));
+        } catch (NumberFormatException e) {
+            // 如果转换失败，说明是String类型的ID（来自web_user表）
+            WebUser webUser = webUserMapper.selectById(id);
+            return success(webUser);
+        }
     }
 
     /**

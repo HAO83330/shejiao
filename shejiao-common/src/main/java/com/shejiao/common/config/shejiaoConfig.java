@@ -115,6 +115,10 @@ public class shejiaoConfig {
      * 获取上传路径
      */
     public static String getUploadPath() {
-        return getProfile() + "/upload";
+        String profile = getProfile();
+        if (profile.endsWith("/upload")) {
+            return profile;
+        }
+        return profile + "/upload";
     }
 }

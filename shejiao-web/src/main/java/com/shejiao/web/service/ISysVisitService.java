@@ -14,6 +14,11 @@ public interface ISysVisitService {
      * 获取今日网站访问人数
      */
     int getWebVisitCount();
+    
+    /**
+     * 获取指定月份网站访问人数
+     */
+    int getWebVisitCount(String month);
 
     /**
      * 获取近30天的访问量
@@ -26,5 +31,10 @@ public interface ISysVisitService {
      * 注：PV表示访问量   UV表示独立用户数
      */
     Map<String, Object> getVisitByWeek();
+    
+    /**
+     * 获取指定月份的访问量
+     */
+    Map<String, Object> getVisitByWeek(String month);
 
 }

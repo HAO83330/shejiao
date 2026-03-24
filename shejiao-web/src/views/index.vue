@@ -109,7 +109,7 @@
               <svg data-v-23d27ada="" data-v-6432121e="" class="reds-icon icon" width="16" height="16">
                 <use data-v-23d27ada="" xlink:href="#convention_b"></use>
               </svg>
-              <span data-v-6432121e="" class="desc">搜索最新种草、拔草信息</span>
+              <span data-v-6432121e="" class="desc">搜索最新社交分享信息</span>
             </div>
             <div data-v-6432121e="" class="line-container">
               <svg data-v-23d27ada="" data-v-6432121e="" class="reds-icon icon" width="16" height="16">
@@ -252,19 +252,18 @@ import {
   House,
   Star,
   Bell,
-  ArrowRight,
   CirclePlus,
   ChatDotRound,
 } from "@element-plus/icons-vue";
 import { useRouter, useRoute } from "vue-router";
 import Login from "@/views/login.vue";
 import { ref, watch, onMounted, computed, watchEffect } from "vue";
-import { ElMessageBox } from "element-plus";
+import { ElMessageBox, ElMessage } from "element-plus";
 import { useUserStore } from "@/store/userStore";
 import { useSearchStore } from "@/store/searchStore";
 import SujContainer from "@/components/SujContainer.vue";
 import SearchContainer from "@/components/SearchContainer.vue";
-import AiChat from "@/components/AiChat.vue";
+import AiChat from "@/components/AIChat.vue";
 import { addRecord, getRecordByKeyWord } from "@/api/search";
 import { getRandomString } from "@/utils/util";
 import { getChatUserList, getCountMessage } from "@/api/im";
@@ -397,9 +396,6 @@ watchEffect(() => {
   }
 });
 
-const handleClick = (url: string | URL | undefined) => {
-  window.open(url, "_blank"); // 打开外链到新标签页
-};
 
 const changeInput = (e: any) => {
   const { value } = e.target;
@@ -635,9 +631,6 @@ const toggleTheme = () => {
   isDark.value = themeStore.isDark;
 };
 
-const openAiChat = () => {
-  aiChatVisible.value = true;
-};
 
 const toAiChat = () => {
   router.push({ path: "/ai-chat" });

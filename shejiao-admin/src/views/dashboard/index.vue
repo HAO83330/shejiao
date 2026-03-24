@@ -1,9 +1,28 @@
 <template>
   <div class="dashboard-editor-container">
 
-    <!-- 导出按钮 -->
+    <!-- 月份选择器和导出按钮 -->
     <el-row class="mb-4">
-      <el-col :span="24" class="text-right">
+      <el-col :span="12">
+        <el-date-picker
+          v-model="selectedMonth"
+          type="month"
+          placeholder="选择月份"
+          format="YYYY-MM"
+          value-format="YYYY-MM"
+          @change="handleMonthChange"
+          style="width: 200px"
+        />
+        <el-button
+          type="default"
+          plain
+          style="margin-left: 10px"
+          @click="resetToDefault"
+        >
+          重置
+        </el-button>
+      </el-col>
+      <el-col :span="12" class="text-right">
         <el-button
           type="primary"
           plain
@@ -181,6 +200,7 @@ const blogSortNameArray = ref([]);
 const showLineChart = ref(false);
 const showPieChart = ref(false);
 const showPieBlogSortChart = ref(false);
+const selectedMonth = ref(new Date().toISOString().slice(0, 7)); // 默认当前月份
 
 function clickBlogSortPie(index) {
   const blogSort = blogCountByBlogSort.value[index];
@@ -198,15 +218,15 @@ function clickBlogTagPie(index) {
   });
 }
 
-async function fetchData() {
+async function fetchData(month = selectedMonth.value) {
   try {
     const [initResponse, visitResponse, tagResponse, blogSortResponse, loginInforResponse, userGrowthResponse] = await Promise.all([
-      init(),
-      getVisitByWeek(),
-      getBlogCountByTag(),
-      getBlogCountByBlogSort(),
+      init({ month }),
+      getVisitByWeek({ month }),
+      getBlogCountByTag({ month }),
+      getBlogCountByBlogSort({ month }),
       listLoginInfor({ pageNum: 1, pageSize: 1000 }),
-      getUserGrowthTrend()
+      getUserGrowthTrend({ month })
     ]);
 
     if (initResponse.code === 200) {
@@ -365,9 +385,20 @@ const btnClick = (id) => {
   router.push({ path: routes[id] });
 };
 
+// 处理月份变更
+function handleMonthChange() {
+  fetchData(selectedMonth.value);
+};
+
+// 重置为默认数据
+function resetToDefault() {
+  selectedMonth.value = ''; // 清空月份选择
+  fetchData(); // 调用fetchData不传递参数，返回默认数据
+};
+
 /** 导出按钮操作 */
 function handleExport() {
-  exportDashboardData()
+  exportDashboardData({ month: selectedMonth.value })
     .then(response => {
       const blob = new Blob([response]);
       const url = window.URL.createObjectURL(blob);

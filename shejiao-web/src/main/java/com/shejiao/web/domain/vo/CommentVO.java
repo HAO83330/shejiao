@@ -28,7 +28,7 @@ public class CommentVO implements Serializable {
     @Excel(name = "笔记标题", sort = 3)
     private String title;
 
-    @Excel(name = "笔记封面", sort = 4)
+    @Excel(name = "笔记封面", sort = 4, cellType = com.shejiao.common.annotation.Excel.ColumnType.IMAGE)
     private String noteCover;
 
     @Excel(name = "评论人ID", sort = 5)
@@ -37,7 +37,7 @@ public class CommentVO implements Serializable {
     @Excel(name = "评论人", sort = 6)
     private String username;
 
-    @Excel(name = "评论人头像", sort = 7)
+    @Excel(name = "评论人头像", sort = 7, cellType = com.shejiao.common.annotation.Excel.ColumnType.IMAGE)
     private String avatar;
 
     private String noteUid;
@@ -52,7 +52,7 @@ public class CommentVO implements Serializable {
     @Excel(name = "被评论人", sort = 9)
     private String replyUsername;
 
-    @Excel(name = "被评论人头像", sort = 10)
+    @Excel(name = "被评论人头像", sort = 10, cellType = com.shejiao.common.annotation.Excel.ColumnType.IMAGE)
     private String replyAvatar;
 
     @Excel(name = "评论内容", sort = 11)

@@ -256,4 +256,91 @@ public class SysMemberServiceImpl implements ISysMemberService {
 
         return result;
     }
+
+    @Override
+    public Integer getMemberCount(int status, String month) {
+        if (month == null || month.isEmpty()) {
+            return getMemberCount(status);
+        }
+        
+        // 根据月份参数查询对应的数据
+        // 构建月份的开始和结束时间
+        String startTime = month + "-01 00:00:00";
+        int daysInMonth = java.time.YearMonth.parse(month).lengthOfMonth();
+        String endTime = month + "-" + daysInMonth + " 23:59:59";
+        
+        QueryWrapper<WebUser> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq(BaseSQLConf.STATUS, status)
+                   .ge("create_time", startTime)
+                   .le("create_time", endTime);
+        return Math.toIntExact(memberMapper.selectCount(queryWrapper));
+    }
+
+    @Override
+    public Map<String, Object> getUserGrowthTrend(int days, String month) {
+        if (month == null || month.isEmpty()) {
+            return getUserGrowthTrend(days);
+        }
+        
+        Map<String, Object> result = new HashMap<>();
+        List<String> dates = new ArrayList<>();
+        List<Integer> newUsers = new ArrayList<>();
+        List<Integer> totalUsers = new ArrayList<>();
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        
+        // 构建月份的开始和结束时间
+        String monthStart = month + "-01";
+        String monthEnd = month + "-" + java.time.YearMonth.parse(month).lengthOfMonth();
+        
+        try {
+            Date startDate = sdf.parse(monthStart);
+            Date endDate = sdf.parse(monthEnd);
+            
+            // 查询指定月份的所有用户
+            List<WebUser> allUsers = memberMapper.selectList(new QueryWrapper<WebUser>()
+                    .ge("create_time", startDate)
+                    .le("create_time", endDate)
+                    .orderByAsc("create_time"));
+
+            // 按日期统计
+            Map<String, Integer> dailyCount = new HashMap<>();
+            for (WebUser user : allUsers) {
+                String dateStr = sdf.format(user.getCreateTime());
+                dailyCount.put(dateStr, dailyCount.getOrDefault(dateStr, 0) + 1);
+            }
+
+            // 生成日期列表和统计数据
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(startDate);
+            int cumulativeCount = 0;
+
+            // 获取开始日期之前的累计用户数
+            QueryWrapper<WebUser> beforeQuery = new QueryWrapper<>();
+            beforeQuery.lt("create_time", startDate);
+            cumulativeCount = Math.toIntExact(memberMapper.selectCount(beforeQuery));
+
+            int daysInMonth = java.time.YearMonth.parse(month).lengthOfMonth();
+            for (int i = 0; i < daysInMonth; i++) {
+                String dateStr = sdf.format(calendar.getTime());
+                dates.add(dateStr);
+
+                int count = dailyCount.getOrDefault(dateStr, 0);
+                newUsers.add(count);
+
+                cumulativeCount += count;
+                totalUsers.add(cumulativeCount);
+
+                calendar.add(Calendar.DAY_OF_MONTH, 1);
+            }
+        } catch (Exception e) {
+            log.error("获取用户增长趋势失败", e);
+        }
+
+        result.put("dates", dates);
+        result.put("newUsers", newUsers);
+        result.put("totalUsers", totalUsers);
+
+        return result;
+    }
 }

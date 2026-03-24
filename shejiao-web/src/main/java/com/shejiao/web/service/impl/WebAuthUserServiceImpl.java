@@ -200,13 +200,20 @@ public class WebAuthUserServiceImpl extends ServiceImpl<WebUserMapper, WebUser> 
         if (!authUserDTO.getPassword().equals(authUserDTO.getCheckPassword())) {
             return false;
         }
-        String pwd = SecureUtil.md5(authUserDTO.getPassword());
         WebUser user;
         if (StringUtils.isBlank(authUserDTO.getId())) {
             user = this.getOne(new QueryWrapper<WebUser>().eq("phone", authUserDTO.getPhone()).or().eq("email", authUserDTO.getEmail()));
         } else {
             user = this.getById(authUserDTO.getId());
         }
+        if (user == null) {
+            return false;
+        }
+        // 验证旧密码
+        if (!user.getPassword().equals(SecureUtil.md5(authUserDTO.getOldPassword()))) {
+            return false;
+        }
+        String pwd = SecureUtil.md5(authUserDTO.getPassword());
         user.setPassword(pwd);
         return this.updateById(user);
     }

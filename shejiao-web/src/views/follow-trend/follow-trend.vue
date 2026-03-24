@@ -8,93 +8,88 @@
       <template v-if="trendTotal > 0">
         <ul class="trend-container">
           <li class="trend-item" v-for="(item, index) in trendData" :key="index">
-            <a class="user-avatar">
-              <img class="avatar-item" :src="item.avatar" @click="toUser(item.uid)" />
-            </a>
-            <div class="main">
-              <div class="info">
-                <div class="user-info">
-                  <a class>{{ item.username }}</a>
-                </div>
-                <div class="interaction-hint">
-                  <span>{{ item.time }}</span>
-                </div>
-                <div class="interaction-content" @click="toMain(item.nid)">
-                  {{ item.content }}
-                </div>
-                <div class="interaction-imgs" @click="toMain(item.nid)">
-                  <!-- 限制最多显示三张图片 -->
-                  <div
-                    class="details-box"
-                    v-for="(url, index) in item.imgUrls.slice(0, 3)"
-                    :key="index"
-                    style="position: relative"
-                  >
-                    <el-image
-                      v-if="!item.isLoading"
-                      :src="url"
-                      @load="handleLoad(item)"
-                      style="height: 230px; width: 100%"
-                    ></el-image>
-                    <el-image
-                      v-else
-                      :src="url"
-                      class="note-img animate__animated animate__fadeIn animate__delay-0.5s"
-                      fit="cover"
-                      style="height: 230px; width: 100%"
-                    ></el-image>
-
-                    <!-- 在第三张图片上显示覆盖标识 -->
-                    <div v-if="index === 2 && item.imgUrls.length > 3" class="overlay">
-                      <span class="more-text">+{{ item.imgUrls.length - 3 }}</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="interaction-footer">
-                  <div class="icon-item">
-                    <i
-                      class="iconfont icon-follow-fill"
-                      :style="{ width: '1em', height: '1em', color: 'red' }"
-                      @click="like(item.nid, item.uid, index, -1)"
-                      v-if="item.isLike"
-                    >
-                    </i>
-                    <i
-                      class="iconfont icon-follow"
-                      style="width: 1em; height: 1em; color: rgba(51, 51, 51, 0.6)"
-                      @click="like(item.nid, item.uid, index, 1)"
-                      v-else
-                    ></i
-                    ><span class="count">{{ item.likeCount }}</span>
-                  </div>
-                  <div class="icon-item" @click="toMain(item.nid)">
-                    <ChatRound style="width: 0.9em; height: 0.9em" /><span class="count">{{ item.commentCount }}</span>
-                  </div>
-                  <el-dropdown trigger="click" @command="(command: string) => handleMoreAction(command, item)">
-                    <div class="icon-item">
-                      <More style="width: 1em; height: 1em" />
-                    </div>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="collection">
-                          <Star v-if="!item.isCollection" style="width: 1em; height: 1em; margin-right: 8px" />
-                          <StarFilled v-else style="width: 1em; height: 1em; margin-right: 8px; color: #ffcc00" />
-                          {{ item.isCollection ? '取消收藏' : '收藏笔记' }}
-                        </el-dropdown-item>
-                        <el-dropdown-item command="share">
-                          <Share style="width: 1em; height: 1em; margin-right: 8px" />
-                          分享笔记
-                        </el-dropdown-item>
-                        <el-dropdown-item command="block">
-                          <Hide style="width: 1em; height: 1em; margin-right: 8px" />
-                          屏蔽该笔记
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+            <!-- 左侧图片区域 -->
+            <div class="left-image-section" @click="toMain(item.nid)">
+              <div class="image-wrapper" v-if="item.imgUrls && item.imgUrls.length > 0">
+                <el-image
+                  v-if="!item.isLoading"
+                  :src="item.imgUrls[0]"
+                  @load="handleLoad(item)"
+                  class="main-image"
+                  fit="cover"
+                ></el-image>
+                <el-image
+                  v-else
+                  :src="item.imgUrls[0]"
+                  class="main-image animate__animated animate__fadeIn animate__delay-0.5s"
+                  fit="cover"
+                ></el-image>
+                <!-- 显示更多图片标识 -->
+                <div v-if="item.imgUrls.length > 1" class="more-images-badge">
+                  <span>+{{ item.imgUrls.length - 1 }}</span>
                 </div>
               </div>
             </div>
+            
+            <!-- 右侧内容区域 -->
+            <div class="right-content-section">
+              <div class="content-header" @click="toMain(item.nid)">
+                <div class="note-title">{{ item.title }}</div>
+                <div class="note-content">{{ item.content }}</div>
+              </div>
+              
+              <!-- 底部信息栏 -->
+              <div class="content-footer">
+                <div class="user-info-left">
+                  <img class="avatar-item" :src="item.avatar" @click.stop="toUser(item.uid)" />
+                  <span class="username">{{ item.username }}</span>
+                </div>
+                <div class="interaction-right">
+                  <div class="icon-item" @click.stop="like(item.nid, item.uid, index, item.isLike ? -1 : 1)">
+                    <i
+                      class="iconfont icon-follow-fill"
+                      style="color: #ff2442; font-size: 16px;"
+                      v-if="item.isLike"
+                    ></i>
+                    <i
+                      class="iconfont icon-follow"
+                      style="color: rgba(51, 51, 51, 0.4); font-size: 16px;"
+                      v-else
+                    ></i>
+                    <span class="count">{{ item.likeCount || 0 }}</span>
+                  </div>
+                  <div class="icon-item" @click.stop="toMain(item.nid)">
+                    <ChatRound style="width: 16px; height: 16px; color: rgba(51, 51, 51, 0.4);" />
+                    <span class="count">{{ item.commentCount || 0 }}</span>
+                  </div>
+                  <span class="time-text">{{ item.time }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 更多操作下拉菜单 -->
+            <el-dropdown trigger="click" @command="(command: string) => handleMoreAction(command, item)" class="more-dropdown">
+              <div class="more-btn">
+                <More style="width: 16px; height: 16px; color: rgba(51, 51, 51, 0.4);" />
+              </div>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="collection">
+                    <Star v-if="!item.isCollection" style="width: 1em; height: 1em; margin-right: 8px" />
+                    <StarFilled v-else style="width: 1em; height: 1em; margin-right: 8px; color: #ffcc00" />
+                    {{ item.isCollection ? '取消收藏' : '收藏笔记' }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="share">
+                    <Share style="width: 1em; height: 1em; margin-right: 8px" />
+                    分享笔记
+                  </el-dropdown-item>
+                  <el-dropdown-item command="block">
+                    <Hide style="width: 1em; height: 1em; margin-right: 8px" />
+                    屏蔽该笔记
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </li>
         </ul>
       </template>
@@ -475,28 +470,6 @@ initData();
 </script>
 
 <style lang="less" scoped>
-.details-box {
-  position: relative;
-}
-
-.overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 10px;
-}
-
-.more-text {
-  color: white;
-  font-size: 20px;
-}
-
 .container {
   flex: 1;
   padding: 0 24px;
@@ -595,109 +568,156 @@ initData();
     .trend-item {
       display: flex;
       flex-direction: row;
-      padding-top: 24px;
-      max-width: 100vw;
+      padding: 20px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      position: relative;
+      gap: 16px;
 
-      .user-avatar {
-        margin-right: 24px;
+      &:last-child {
+        border-bottom: none;
+      }
+
+      /* 左侧图片区域 */
+      .left-image-section {
         flex-shrink: 0;
+        cursor: pointer;
 
-        .avatar-item {
-          width: 48px;
-          height: 48px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          border-radius: 100%;
-          border: 1px solid rgba(0, 0, 0, 0.08);
-          object-fit: cover;
+        .image-wrapper {
+          position: relative;
+          width: 180px;
+          height: 130px;
+          border-radius: 12px;
+          overflow: hidden;
+
+          .main-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 12px;
+          }
+
+          .more-images-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+          }
         }
       }
 
-      .main {
-        flex-grow: 1;
-        flex-shrink: 1;
+      /* 右侧内容区域 */
+      .right-content-section {
+        flex: 1;
         display: flex;
-        flex-direction: row;
-        padding-bottom: 12px;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 130px;
 
-        .info {
-          flex-grow: 1;
-          flex-shrink: 1;
+        .content-header {
+          cursor: pointer;
+          flex: 1;
 
-          .user-info {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
+          .note-title {
             font-size: 16px;
             font-weight: 600;
-            margin-bottom: 4px;
-
-            a {
-              color: #333;
-            }
-          }
-
-          .interaction-hint {
-            font-size: 14px;
-            color: rgba(51, 51, 51, 0.6);
-            margin-bottom: 8px;
-          }
-
-          .interaction-content {
-            display: flex;
-            font-size: 14px;
             color: #333;
-            margin-bottom: 12px;
-            line-height: 140%;
-            cursor: pointer;
+            margin-bottom: 6px;
+            line-height: 1.4;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
           }
 
-          .interaction-imgs {
+          .note-content {
+            font-size: 14px;
+            color: rgba(51, 51, 51, 0.7);
+            line-height: 1.5;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+          }
+        }
+
+        /* 底部信息栏 */
+        .content-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 12px;
+
+          .user-info-left {
             display: flex;
+            align-items: center;
+            gap: 8px;
 
-            .details-box {
-              width: 25%;
-              border-radius: 4px;
-              margin: 8px 12px 0 0;
+            .avatar-item {
+              width: 24px;
+              height: 24px;
+              border-radius: 50%;
               cursor: pointer;
+              object-fit: cover;
+              border: 1px solid rgba(0, 0, 0, 0.08);
+            }
 
-              .note-img {
-                width: 100%;
-                height: 230px;
-                display: flex;
-                border-radius: 10px;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                object-fit: cover;
-              }
+            .username {
+              font-size: 13px;
+              color: rgba(51, 51, 51, 0.8);
             }
           }
 
-          .interaction-footer {
-            margin: 8px 12px 0 0;
-            padding: 0 12px;
+          .interaction-right {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 16px;
 
             .icon-item {
               display: flex;
-              justify-content: left;
               align-items: center;
-              color: rgba(51, 51, 51, 0.929);
+              gap: 4px;
+              cursor: pointer;
+              transition: transform 0.2s;
+
+              &:hover {
+                transform: scale(1.1);
+              }
 
               .count {
-                margin-left: 3px;
+                font-size: 13px;
+                color: rgba(51, 51, 51, 0.6);
               }
             }
-            :hover {
-              cursor: pointer; /* 显示小手指针 */
-              transform: scale(1.2); /* 鼠标移入时按钮稍微放大 */
+
+            .time-text {
+              font-size: 13px;
+              color: rgba(51, 51, 51, 0.4);
             }
+          }
+        }
+      }
+
+      /* 更多操作按钮 */
+      .more-dropdown {
+        position: absolute;
+        top: 20px;
+        right: 0;
+
+        .more-btn {
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+          transition: background-color 0.2s;
+
+          &:hover {
+            background-color: rgba(0, 0, 0, 0.05);
           }
         }
       }

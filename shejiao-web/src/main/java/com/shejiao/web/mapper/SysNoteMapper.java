@@ -34,4 +34,14 @@ public interface SysNoteMapper extends BaseMapper<WebNote> {
      */
     @Select("SELECT cpid, COUNT(cpid) as count FROM  web_note where status = 1 GROUP BY cpid")
     List<Map<String, Object>> getNoteCountByCategory();
+    
+    /**
+     * 通过标签获取指定时间范围内的博客数量
+     *
+     * @param startTime
+     * @param endTime
+     * @return
+     */
+    @Select("SELECT cpid, COUNT(cpid) as count FROM  web_note where status = 1 AND create_time >= #{startTime} AND create_time <= #{endTime} GROUP BY cpid")
+    List<Map<String, Object>> getNoteCountByCategory(@Param("startTime") String startTime, @Param("endTime") String endTime);
 }

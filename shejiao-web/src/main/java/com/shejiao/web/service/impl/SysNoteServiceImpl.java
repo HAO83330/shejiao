@@ -324,4 +324,127 @@ public class SysNoteServiceImpl implements ISysNoteService {
         noteMapper.updateById(note);
         return true;
     }
+
+    @Override
+    public Integer getNoteCount(int status, String month) {
+        if (month == null || month.isEmpty()) {
+            return getNoteCount(status);
+        }
+        
+        // 根据月份参数查询对应的数据
+        // 构建月份的开始和结束时间
+        String startTime = month + "-01 00:00:00";
+        int daysInMonth = java.time.YearMonth.parse(month).lengthOfMonth();
+        String endTime = month + "-" + daysInMonth + " 23:59:59";
+        
+        QueryWrapper<WebNote> queryWrapper = new QueryWrapper<>();
+        queryWrapper.ge("create_time", startTime)
+                   .le("create_time", endTime);
+        return Math.toIntExact(noteMapper.selectCount(queryWrapper));
+    }
+
+    @Override
+    public Map<String, Object> getNoteContributeCount(String month) {
+        if (month == null || month.isEmpty()) {
+            return getNoteContributeCount();
+        }
+        
+        // 根据月份参数查询对应的数据
+        // 构建月份的开始和结束时间
+        String startTime = month + "-01 00:00:00";
+        int daysInMonth = java.time.YearMonth.parse(month).lengthOfMonth();
+        String endTime = month + "-" + daysInMonth + " 23:59:59";
+        
+        List<Map<String, Object>> noteContributeMap = noteMapper.getNoteContributeCount(startTime, endTime);
+        List<String> dateList = new ArrayList<>();
+        
+        for (int i = 1; i <= daysInMonth; i++) {
+            dateList.add(month + "-" + String.format("%02d", i));
+        }
+        
+        Map<String, Object> dateMap = new HashMap<>();
+        for (Map<String, Object> itemMap : noteContributeMap) {
+            dateMap.put(itemMap.get("DATE").toString(), itemMap.get("COUNT"));
+        }
+
+        List<List<Object>> resultList = new ArrayList<>();
+        for (String item : dateList) {
+            Integer count = 0;
+            if (dateMap.get(item) != null) {
+                count = Integer.valueOf(dateMap.get(item).toString());
+            }
+            List<Object> objectList = new ArrayList<>();
+            objectList.add(item);
+            objectList.add(count);
+            resultList.add(objectList);
+        }
+
+        Map<String, Object> resultMap = new HashMap<>(Constantss.NUM_TWO);
+        List<String> contributeDateList = new ArrayList<>();
+        contributeDateList.add(startTime);
+        contributeDateList.add(endTime);
+        resultMap.put(SysConf.CONTRIBUTE_DATE, contributeDateList);
+        resultMap.put(SysConf.BLOG_CONTRIBUTE_COUNT, resultList);
+        
+        return resultMap;
+    }
+
+    @Override
+    public List<Map<String, Object>> getNoteCountByCategory(String month) {
+        if (month == null || month.isEmpty()) {
+            return getNoteCountByCategory();
+        }
+        
+        // 根据月份参数查询对应的数据
+        // 构建月份的开始和结束时间
+        String startTime = month + "-01 00:00:00";
+        int daysInMonth = java.time.YearMonth.parse(month).lengthOfMonth();
+        String endTime = month + "-" + daysInMonth + " 23:59:59";
+        
+        List<Map<String, Object>> noteCountByBlogSortMap = noteMapper.getNoteCountByCategory(startTime, endTime);
+        Map<String, Integer> categoryMap = new HashMap<>();
+        for (Map<String, Object> item : noteCountByBlogSortMap) {
+            String cpid = String.valueOf(item.get("cpid"));
+            // java.lang.Number是Integer,Long的父类
+            Number num = (Number) item.get(SysConf.COUNT);
+            Integer count = 0;
+            if (num != null) {
+                count = num.intValue();
+            }
+            categoryMap.put(cpid, count);
+        }
+
+        //把查询到的BlogSort放到Map中
+        Set<String> blogSortUids = categoryMap.keySet();
+        Collection<WebNavbar> blogSortCollection = new ArrayList<>();
+
+        if (blogSortUids.size() > 0) {
+            blogSortCollection = navbarMapper.selectBatchIds(blogSortUids);
+        }
+
+        Map<String, String> blogSortEntityMap = new HashMap<>();
+        for (WebNavbar category : blogSortCollection) {
+            if (StringUtilss.isNotEmpty(category.getTitle())) {
+                blogSortEntityMap.put(String.valueOf(category.getId()), category.getTitle());
+            }
+        }
+
+        List<Map<String, Object>> resultList = new ArrayList<Map<String, Object>>();
+        for (Map.Entry<String, Integer> entry : categoryMap.entrySet()) {
+
+            String blogSortUid = entry.getKey();
+
+            if (blogSortEntityMap.get(blogSortUid) != null) {
+                String blogSortName = blogSortEntityMap.get(blogSortUid);
+                Integer count = entry.getValue();
+                Map<String, Object> itemResultMap = new HashMap<>();
+                itemResultMap.put(SysConf.BLOG_SORT_UID, blogSortUid);
+                itemResultMap.put(SysConf.NAME, blogSortName);
+                itemResultMap.put(SysConf.VALUE, count);
+                resultList.add(itemResultMap);
+            }
+        }
+        
+        return resultList;
+    }
 }

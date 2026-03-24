@@ -425,6 +425,21 @@ public class WebEsNoteServiceImpl extends ServiceImpl<WebNoteMapper, WebNote> im
     @Override
     public void addNote(NoteSearchVO noteSearchVo) {
         try {
+            // 设置分类信息
+            if (StringUtils.isNotBlank(noteSearchVo.getCid())) {
+                WebNavbar category = categoryMapper.selectById(noteSearchVo.getCid());
+                if (category != null) {
+                    noteSearchVo.setCategoryName(category.getTitle());
+                    // 设置父分类信息
+                    if (StringUtils.isNotBlank(noteSearchVo.getCpid())) {
+                        WebNavbar parentCategory = categoryMapper.selectById(noteSearchVo.getCpid());
+                        if (parentCategory != null) {
+                            noteSearchVo.setCategoryParentName(parentCategory.getTitle());
+                        }
+                    }
+                }
+            }
+            
             CreateResponse createResponse = elasticsearchClient.create(e -> e.index(NoteConstant.NOTE_INDEX).id(noteSearchVo.getId()).document(noteSearchVo));
             log.info("createResponse.result{}", createResponse.result());
         } catch (Exception e) {
@@ -440,6 +455,21 @@ public class WebEsNoteServiceImpl extends ServiceImpl<WebNoteMapper, WebNote> im
     @Override
     public void updateNote(NoteSearchVO noteSearchVo) {
         try {
+            // 设置分类信息
+            if (StringUtils.isNotBlank(noteSearchVo.getCid())) {
+                WebNavbar category = categoryMapper.selectById(noteSearchVo.getCid());
+                if (category != null) {
+                    noteSearchVo.setCategoryName(category.getTitle());
+                    // 设置父分类信息
+                    if (StringUtils.isNotBlank(noteSearchVo.getCpid())) {
+                        WebNavbar parentCategory = categoryMapper.selectById(noteSearchVo.getCpid());
+                        if (parentCategory != null) {
+                            noteSearchVo.setCategoryParentName(parentCategory.getTitle());
+                        }
+                    }
+                }
+            }
+            
             UpdateResponse<NoteSearchVO> updateResponse = elasticsearchClient.update(e -> e.index(NoteConstant.NOTE_INDEX).id(noteSearchVo.getId()).doc(noteSearchVo), NoteSearchVO.class);
             log.info("updateResponse.result() = " + updateResponse.result());
         } catch (Exception e) {
@@ -473,6 +503,21 @@ public class WebEsNoteServiceImpl extends ServiceImpl<WebNoteMapper, WebNote> im
             WebUser user = userMapper.selectOne(new QueryWrapper<WebUser>().like("id", noteSearchVo.getUid()));
             noteSearchVo.setAvatar(user.getAvatar());
             noteSearchVo.setUsername(user.getUsername());
+
+            // 设置分类信息
+            if (StringUtils.isNotBlank(noteSearchVo.getCid())) {
+                WebNavbar category = categoryMapper.selectById(noteSearchVo.getCid());
+                if (category != null) {
+                    noteSearchVo.setCategoryName(category.getTitle());
+                    // 设置父分类信息
+                    if (StringUtils.isNotBlank(noteSearchVo.getCpid())) {
+                        WebNavbar parentCategory = categoryMapper.selectById(noteSearchVo.getCpid());
+                        if (parentCategory != null) {
+                            noteSearchVo.setCategoryParentName(parentCategory.getTitle());
+                        }
+                    }
+                }
+            }
 
             // 是否点赞
             List<WebLikeOrCollect> likeOrCollections = likeOrCollectionMapper.selectList(new QueryWrapper<WebLikeOrCollect>().eq("uid", user.getId()).eq("type", 1));

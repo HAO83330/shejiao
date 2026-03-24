@@ -67,6 +67,7 @@ public class SysUser extends BaseEntity {
     /**
      * 用户头像
      */
+    @Excel(name = "用户头像", cellType = Excel.ColumnType.IMAGE)
     private String avatar;
 
     /**

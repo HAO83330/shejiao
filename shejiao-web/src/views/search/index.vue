@@ -34,6 +34,9 @@
             >
               {{ item.title }}
             </div>
+            <div class="empty-message" v-if="isSearchEmpty">
+              {{ emptyMessage }}
+            </div>
           </div>
         </div>
       </div>
@@ -178,7 +181,7 @@
 import { Waterfall } from "vue-waterfall-plugin-next";
 import "vue-waterfall-plugin-next/dist/style.css";
 import { ref, watch } from "vue";
-import { getNoteByDTO, getCategoryAgg } from "@/api/search";
+import { getNoteByDTO, getCategoryAgg, getRecommendNote } from "@/api/search";
 import type { NoteDTO, NoteSearch } from "@/type/note";
 import type { Category } from "@/type/category";
 import Main from "@/views/main/main.vue";
@@ -442,9 +445,14 @@ const getNoteListByCategory = (id: string) => {
   });
 };
 
-const getNoteListByKeyword = () => {
+const isSearchEmpty = ref(false);
+const emptyMessage = ref("");
+
+const getNoteListByKeyword = async () => {
   noteList.value = [] as Array<any>;
   currentPage.value = 1;
+  isSearchEmpty.value = false;
+  emptyMessage.value = "";
   
   if (noteDTO.value.keyword && userStore.isLogin()) {
     const userInfo = userStore.getUserInfo();
@@ -453,8 +461,70 @@ const getNoteListByKeyword = () => {
     });
   }
   
-  getNoteByDTO(currentPage.value, pageSize, noteDTO.value).then((res) => {
-    setData(res);
+  try {
+    const res = await getNoteByDTO(currentPage.value, pageSize, noteDTO.value);
+    const { records, total } = res.data;
+    noteTotal.value = total;
+    
+    if (records.length === 0) {
+      // 搜索结果为空，尝试关联搜索
+      await 关联搜索逻辑();
+    } else {
+      noteList.value.push(...records);
+    }
+  } catch (error) {
+    console.error("搜索失败:", error);
+    // 搜索失败时，显示推荐笔记
+    显示推荐笔记();
+  }
+};
+
+const 关联搜索逻辑 = async () => {
+  const keyword = noteDTO.value.keyword;
+  if (!keyword || keyword.length <= 1) {
+    // 关键词长度小于等于1，直接显示推荐
+    显示推荐笔记();
+    return;
+  }
+  
+  // 逐个字进行关联搜索
+  let foundResult = false;
+  for (let i = 1; i < keyword.length; i++) {
+    const partialKeyword = keyword.substring(0, keyword.length - i);
+    const tempDTO = { ...noteDTO.value, keyword: partialKeyword };
+    
+    try {
+      const res = await getNoteByDTO(1, pageSize, tempDTO);
+      const { records, total } = res.data;
+      if (records.length > 0 && !foundResult) {
+        foundResult = true;
+        noteTotal.value = total;
+        noteList.value.push(...records);
+        isSearchEmpty.value = false;
+        break; // 找到结果后停止搜索
+      }
+    } catch (error) {
+      console.error("关联搜索失败:", error);
+    }
+  }
+  
+  // 所有关联搜索都没有结果，显示推荐
+  if (!foundResult) {
+    显示推荐笔记();
+  }
+};
+
+const 显示推荐笔记 = () => {
+  isSearchEmpty.value = true;
+  emptyMessage.value = "抱歉，没找到相关内容、笔记，给你推荐别的内容";
+  
+  // 调用推荐笔记接口
+  getRecommendNote(1, pageSize).then((res) => {
+    const { records, total } = res.data;
+    noteTotal.value = total;
+    noteList.value.push(...records);
+  }).catch((err) => {
+    console.error("获取推荐笔记失败:", err);
   });
 };
 
@@ -612,6 +682,19 @@ initData();
           user-select: none;
           //background: rgba(0, 0, 0, 0.03);
           border-radius: 0.625rem;
+        }
+
+        .empty-message {
+          height: 2.5rem;
+          margin-right: 0.75rem;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 0 1rem;
+          -webkit-user-select: none;
+          user-select: none;
+          color: #ff2e4d;
+          font-weight: 500;
         }
       }
     }

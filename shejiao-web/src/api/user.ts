@@ -144,3 +144,16 @@ export const getUserByKeyword = (currentPage: number, pageSize: number, keyword:
   });
 };
 
+/**
+ * 修改密码
+ * @param data
+ * @returns
+ */
+export const updatePassword = (data: any) => {
+  return request<any>({
+    url: "/web/auth/updatePassword", // mock接口
+    method: "post",
+    data,
+  });
+};
+

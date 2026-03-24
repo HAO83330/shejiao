@@ -67,10 +67,25 @@ public interface ISysNoteService {
     List<WebNote> selectNoteByIds(List<Long> ids);
 
     Object getNoteCount(int status);
+    
+    /**
+     * 获取指定月份笔记数量
+     */
+    Object getNoteCount(int status, String month);
 
     Map<String, Object> getNoteContributeCount();
+    
+    /**
+     * 获取指定月份文章贡献数
+     */
+    Map<String, Object> getNoteContributeCount(String month);
 
     List<Map<String, Object>> getNoteCountByCategory();
+    
+    /**
+     * 获取指定月份每个分类下文章数目
+     */
+    List<Map<String, Object>> getNoteCountByCategory(String month);
 
     /**
      * 审核管理

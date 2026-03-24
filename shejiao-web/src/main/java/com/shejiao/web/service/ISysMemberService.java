@@ -62,6 +62,11 @@ public interface ISysMemberService {
     int deleteMemberByIds(Long[] ids);
 
     Object getMemberCount(int enable);
+    
+    /**
+     * 获取指定月份会员数量
+     */
+    Object getMemberCount(int enable, String month);
 
     /**
      * 获取用户增长趋势数据
@@ -70,4 +75,9 @@ public interface ISysMemberService {
      * @return 用户增长趋势数据
      */
     Map<String, Object> getUserGrowthTrend(int days);
+    
+    /**
+     * 获取指定月份用户增长趋势数据
+     */
+    Map<String, Object> getUserGrowthTrend(int days, String month);
 }

@@ -36,7 +36,7 @@ public class WebUser extends shejiaoBaseEntity {
     /**
      * 头像
      */
-    @Excel(name = "头像", sort = 3)
+    @Excel(name = "头像", sort = 3, cellType = com.shejiao.common.annotation.Excel.ColumnType.IMAGE)
     private String avatar;
 
     /**
@@ -84,7 +84,7 @@ public class WebUser extends shejiaoBaseEntity {
     /**
      * 用户封面
      */
-    @Excel(name = "用户封面", sort = 11)
+    @Excel(name = "用户封面", sort = 11, cellType = com.shejiao.common.annotation.Excel.ColumnType.IMAGE)
     private String userCover;
 
     /**

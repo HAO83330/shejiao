@@ -18,6 +18,7 @@ import org.apache.poi.xssf.usermodel.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletResponse;
@@ -52,68 +53,68 @@ public class SysDashboardController extends BaseController {
 
     @ApiOperation(value = "首页初始化数据", notes = "首页初始化数据", response = String.class)
     @RequestMapping(value = "/init", method = RequestMethod.GET)
-    public AjaxResult init() {
+    public AjaxResult init(@RequestParam(value = "month", required = false) String month) {
         Map<String, Object> map = new HashMap<>(Constantss.NUM_FOUR);
-        map.put(SysConf.VISIT_COUNT, visitService.getWebVisitCount());
-        map.put(SysConf.USER_COUNT, memberService.getMemberCount(0));
-        map.put(SysConf.BLOG_COUNT, noteService.getNoteCount(EStatus.ENABLE));
-        map.put(SysConf.COMMENT_COUNT, commentService.getCommentCount(EStatus.ENABLE));
+        map.put(SysConf.VISIT_COUNT, visitService.getWebVisitCount(month));
+        map.put(SysConf.USER_COUNT, memberService.getMemberCount(0, month));
+        map.put(SysConf.BLOG_COUNT, noteService.getNoteCount(EStatus.ENABLE, month));
+        map.put(SysConf.COMMENT_COUNT, commentService.getCommentCount(EStatus.ENABLE, month));
         return success(map);
     }
 
     @ApiOperation(value = "获取最近30天用户独立IP数和访问量", notes = "获取最近30天用户独立IP数和访问量", response = String.class)
     @RequestMapping(value = "/getVisitByWeek", method = RequestMethod.GET)
-    public AjaxResult getVisitByWeek() {
-        Map<String, Object> visitByWeek = visitService.getVisitByWeek();
+    public AjaxResult getVisitByWeek(@RequestParam(value = "month", required = false) String month) {
+        Map<String, Object> visitByWeek = visitService.getVisitByWeek(month);
         return success(visitByWeek);
     }
 
     @ApiOperation(value = "获取每个标签下文章数目", notes = "获取每个标签下文章数目", response = String.class)
     @RequestMapping(value = "/getBlogCountByTag", method = RequestMethod.GET)
-    public AjaxResult getBlogCountByTag() {
-        List<Map<String, Object>> blogCountByTag = noteService.getNoteCountByCategory();
+    public AjaxResult getBlogCountByTag(@RequestParam(value = "month", required = false) String month) {
+        List<Map<String, Object>> blogCountByTag = noteService.getNoteCountByCategory(month);
         return success(blogCountByTag);
     }
 
     @ApiOperation(value = "获取每个分类下文章数目", notes = "获取每个分类下文章数目", response = String.class)
     @RequestMapping(value = "/getBlogCountByBlogSort", method = RequestMethod.GET)
-    public AjaxResult getBlogCountByBlogSort() {
-        List<Map<String, Object>> blogCountByTag = noteService.getNoteCountByCategory();
+    public AjaxResult getBlogCountByBlogSort(@RequestParam(value = "month", required = false) String month) {
+        List<Map<String, Object>> blogCountByTag = noteService.getNoteCountByCategory(month);
         return success(blogCountByTag);
     }
 
     @ApiOperation(value = "获取一年内的文章贡献数", notes = "获取一年内的文章贡献度", response = String.class)
     @RequestMapping(value = "/getBlogContributeCount", method = RequestMethod.GET)
-    public AjaxResult getBlogContributeCount() {
-        Map<String, Object> resultMap = noteService.getNoteContributeCount();
+    public AjaxResult getBlogContributeCount(@RequestParam(value = "month", required = false) String month) {
+        Map<String, Object> resultMap = noteService.getNoteContributeCount(month);
         return success(resultMap);
     }
 
     @ApiOperation(value = "获取用户增长趋势", notes = "获取最近30天的用户增长趋势", response = String.class)
     @RequestMapping(value = "/getUserGrowthTrend", method = RequestMethod.GET)
-    public AjaxResult getUserGrowthTrend() {
-        Map<String, Object> resultMap = memberService.getUserGrowthTrend(30);
+    public AjaxResult getUserGrowthTrend(@RequestParam(value = "month", required = false) String month) {
+        Map<String, Object> resultMap = memberService.getUserGrowthTrend(30, month);
         return success(resultMap);
     }
 
     @ApiOperation(value = "导出首页数据", notes = "导出首页所有数据和图表为Excel", response = String.class)
     @RequestMapping(value = "/export", method = RequestMethod.POST)
-    public void export(HttpServletResponse response) {
+    public void export(HttpServletResponse response, @RequestParam(value = "month", required = false) String month) {
         try {
             // 创建工作簿
             XSSFWorkbook workbook = new XSSFWorkbook();
 
             // 1. 创建基础数据工作表
-            createBasicDataSheet(workbook);
+            createBasicDataSheet(workbook, month);
 
             // 2. 创建分类统计图表工作表
-            createCategoryChartSheet(workbook);
+            createCategoryChartSheet(workbook, month);
 
             // 3. 创建访问趋势图表工作表
-            createVisitTrendChartSheet(workbook);
+            createVisitTrendChartSheet(workbook, month);
 
             // 4. 创建用户增长趋势图表工作表
-            createUserGrowthChartSheet(workbook);
+            createUserGrowthChartSheet(workbook, month);
 
             // 设置响应头
             response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -145,7 +146,7 @@ public class SysDashboardController extends BaseController {
     /**
      * 创建基础数据工作表
      */
-    private void createBasicDataSheet(XSSFWorkbook workbook) {
+    private void createBasicDataSheet(XSSFWorkbook workbook, String month) {
         XSSFSheet sheet = workbook.createSheet("基础数据");
 
         // 创建表头
@@ -158,10 +159,10 @@ public class SysDashboardController extends BaseController {
 
         // 添加基础统计数据
         Map<String, Object> initData = new HashMap<>();
-        initData.put(SysConf.VISIT_COUNT, visitService.getWebVisitCount());
-        initData.put(SysConf.USER_COUNT, memberService.getMemberCount(0));
-        initData.put(SysConf.BLOG_COUNT, noteService.getNoteCount(EStatus.ENABLE));
-        initData.put(SysConf.COMMENT_COUNT, commentService.getCommentCount(EStatus.ENABLE));
+        initData.put(SysConf.VISIT_COUNT, visitService.getWebVisitCount(month));
+        initData.put(SysConf.USER_COUNT, memberService.getMemberCount(0, month));
+        initData.put(SysConf.BLOG_COUNT, noteService.getNoteCount(EStatus.ENABLE, month));
+        initData.put(SysConf.COMMENT_COUNT, commentService.getCommentCount(EStatus.ENABLE, month));
 
         // 填充数据
         int rowIndex = 1;
@@ -203,11 +204,11 @@ public class SysDashboardController extends BaseController {
     /**
      * 创建分类统计图表工作表
      */
-    private void createCategoryChartSheet(XSSFWorkbook workbook) {
+    private void createCategoryChartSheet(XSSFWorkbook workbook, String month) {
         XSSFSheet sheet = workbook.createSheet("分类统计");
 
         // 添加分类数据
-        List<Map<String, Object>> categoryData = noteService.getNoteCountByCategory();
+        List<Map<String, Object>> categoryData = noteService.getNoteCountByCategory(month);
         if (categoryData != null && !categoryData.isEmpty()) {
             // 创建表头
             XSSFRow headerRow = sheet.createRow(0);
@@ -253,11 +254,11 @@ public class SysDashboardController extends BaseController {
     /**
      * 创建访问趋势图表工作表
      */
-    private void createVisitTrendChartSheet(XSSFWorkbook workbook) {
+    private void createVisitTrendChartSheet(XSSFWorkbook workbook, String month) {
         XSSFSheet sheet = workbook.createSheet("访问趋势");
 
         // 添加访问趋势数据
-        Map<String, Object> visitByWeek = visitService.getVisitByWeek();
+        Map<String, Object> visitByWeek = visitService.getVisitByWeek(month);
         if (visitByWeek != null) {
             List<String> dates = (List<String>) visitByWeek.get("date");
             List<Integer> pv = (List<Integer>) visitByWeek.get("pv");
@@ -318,11 +319,11 @@ public class SysDashboardController extends BaseController {
     /**
      * 创建用户增长趋势图表工作表
      */
-    private void createUserGrowthChartSheet(XSSFWorkbook workbook) {
+    private void createUserGrowthChartSheet(XSSFWorkbook workbook, String month) {
         XSSFSheet sheet = workbook.createSheet("用户增长");
 
         // 添加用户增长趋势数据
-        Map<String, Object> userGrowth = memberService.getUserGrowthTrend(30);
+        Map<String, Object> userGrowth = memberService.getUserGrowthTrend(30, month);
         if (userGrowth != null) {
             List<String> growthDates = (List<String>) userGrowth.get("dates");
             List<Integer> newUsers = (List<Integer>) userGrowth.get("newUsers");

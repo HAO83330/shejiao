@@ -26,20 +26,24 @@ public class ImageUtils {
     public static byte[] getImage(String imagePath) {
         InputStream is = getFile(imagePath);
         try {
-            return IOUtils.toByteArray(is);
+            if (is != null) {
+                return IOUtils.toByteArray(is);
+            }
         } catch (Exception e) {
             log.error("图片加载异常 {}", e);
-            return null;
         } finally {
             IOUtils.closeQuietly(is);
         }
+        return null;
     }
 
     public static InputStream getFile(String imagePath) {
         try {
             byte[] result = readFile(imagePath);
-            result = Arrays.copyOf(result, result.length);
-            return new ByteArrayInputStream(result);
+            if (result != null) {
+                result = Arrays.copyOf(result, result.length);
+                return new ByteArrayInputStream(result);
+            }
         } catch (Exception e) {
             log.error("获取图片异常 {}", e);
         }
@@ -55,7 +59,7 @@ public class ImageUtils {
     public static byte[] readFile(String url) {
         InputStream in = null;
         try {
-            if (url.startsWith("http")) {
+            if (url.startsWith("http") || url.startsWith("https")) {
                 // 网络地址
                 URL urlObj = new URL(url);
                 URLConnection urlConnection = urlObj.openConnection();
@@ -63,10 +67,30 @@ public class ImageUtils {
                 urlConnection.setReadTimeout(60 * 1000);
                 urlConnection.setDoInput(true);
                 in = urlConnection.getInputStream();
+            } else if (url.startsWith("data:image")) {
+                // Base64编码的图片数据
+                String base64Data = url.split(",")[1];
+                byte[] data = java.util.Base64.getDecoder().decode(base64Data);
+                in = new ByteArrayInputStream(data);
             } else {
                 // 本机地址
-                String localPath = shejiaoConfig.getProfile();
-                String downloadPath = localPath + StringUtils.substringAfter(url, Constants.RESOURCE_PREFIX);
+                String uploadPath = shejiaoConfig.getUploadPath();
+                String downloadPath;
+                if (url.startsWith(Constants.RESOURCE_PREFIX)) {
+                    // 包含资源前缀，移除前缀后拼接
+                    String path = StringUtils.substringAfter(url, Constants.RESOURCE_PREFIX);
+                    // 避免重复的upload路径
+                    if (path.startsWith("/upload")) {
+                        path = path.substring(7); // 移除 "/upload"
+                    }
+                    downloadPath = uploadPath + path;
+                } else if (url.startsWith("/")) {
+                    // 以斜杠开头，直接拼接
+                    downloadPath = uploadPath + url;
+                } else {
+                    // 相对路径，直接拼接
+                    downloadPath = uploadPath + "/" + url;
+                }
                 in = new FileInputStream(downloadPath);
             }
             return IOUtils.toByteArray(in);

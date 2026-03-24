@@ -805,8 +805,10 @@ public class ExcelUtil<T> {
             String imagePath = Convert.toStr(value);
             if (StringUtils.isNotEmpty(imagePath)) {
                 byte[] data = ImageUtils.getImage(imagePath);
-                getDrawingPatriarch(cell.getSheet()).createPicture(anchor,
-                        cell.getSheet().getWorkbook().addPicture(data, getImageType(data)));
+                if (data != null) {
+                    getDrawingPatriarch(cell.getSheet()).createPicture(anchor,
+                            cell.getSheet().getWorkbook().addPicture(data, getImageType(data)));
+                }
             }
         }
     }
@@ -825,6 +827,9 @@ public class ExcelUtil<T> {
      * 获取图片类型,设置图片插入类型
      */
     public int getImageType(byte[] value) {
+        if (value == null) {
+            return Workbook.PICTURE_TYPE_JPEG;
+        }
         String type = FileTypeUtils.getFileExtendName(value);
         if ("JPG".equalsIgnoreCase(type)) {
             return Workbook.PICTURE_TYPE_JPEG;

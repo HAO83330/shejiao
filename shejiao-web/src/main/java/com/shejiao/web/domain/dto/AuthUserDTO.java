@@ -29,6 +29,9 @@ public class AuthUserDTO implements Serializable {
     @ApiModelProperty("校验密码")
     private String checkPassword;
 
+    @ApiModelProperty("旧密码")
+    private String oldPassword;
+
     @Pattern(regexp = "^1[0-9]{10}$", message = "手机号格式有误", groups = DefaultGroup.class)
     @ApiModelProperty("手机号")
     private String phone;
